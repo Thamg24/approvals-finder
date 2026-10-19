@@ -1,0 +1,1265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Environmental Approvals Finder</title>
+<meta name="description" content="Click a location in Australia or New Zealand, choose a construction type and see the environmental approvals and permits that may apply at federal, state and council level.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --forest:#0f3b2c; --forest-2:#17523d; --leaf:#2f8f5b; --leaf-soft:#e3f1e8; --mint:#f3f8f4;
+  --ink:#13221b; --ink-2:#3c5248; --muted:#6b7f75; --line:#d9e4dd; --card:#ffffff; --bg:#f6f9f7;
+  --likely:#b9441f; --likely-bg:#fbe9e2; --possible:#a26a06; --possible-bg:#fbf1dc; --check:#4f6a62; --check-bg:#e8efec;
+  --radius:12px; --shadow:0 1px 2px rgba(15,59,44,.06),0 4px 16px rgba(15,59,44,.06);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:Manrope,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--forest-2)}
+
+/* Header */
+.top{height:60px;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--forest);color:#fff;position:relative;z-index:1000}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff}
+.brand svg{width:30px;height:30px;flex:none}
+.brand-word{font-weight:700;letter-spacing:.12em;font-size:12px;opacity:.85}
+.divider{width:1px;height:26px;background:rgba(255,255,255,.2)}
+.title h1{font-family:Fraunces,Georgia,serif;font-size:19px;margin:0;font-weight:600;letter-spacing:-.01em}
+.title p{margin:0;font-size:12px;opacity:.72}
+.top .spacer{flex:1}
+.pill-flags{display:flex;gap:6px}
+.pill-flags span{font-size:11px;font-weight:700;letter-spacing:.06em;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:3px 9px}
+
+/* Layout */
+.app{display:grid;grid-template-columns:minmax(380px,460px) 1fr;height:calc(100% - 60px)}
+.panel{overflow-y:auto;background:var(--bg);border-right:1px solid var(--line);padding:18px 18px 40px}
+#map{height:100%;width:100%;background:#dfe9e3}
+
+/* Steps */
+.step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.step-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.num{width:24px;height:24px;border-radius:50%;background:var(--forest);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:none}
+.step-h h2{font-size:14px;margin:0;font-weight:700}
+.step-h .sub{margin-left:auto;font-size:12px;color:var(--muted)}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:var(--mint)}
+.search input:focus,select:focus,.council-in:focus{outline:2px solid var(--leaf);outline-offset:1px;background:#fff}
+.btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--leaf);color:var(--forest-2)}
+.btn.primary{background:var(--forest);border-color:var(--forest);color:#fff}
+.btn.primary:hover{background:var(--forest-2);color:#fff}
+.hint{font-size:12px;color:var(--muted);margin:8px 0 0}
+.loc{margin-top:12px;display:none;border-top:1px dashed var(--line);padding-top:12px}
+.loc.show{display:block}
+.loc-grid{display:grid;grid-template-columns:96px 1fr;gap:8px 10px;align-items:center}
+.loc-grid label{font-size:12px;color:var(--muted);font-weight:600}
+.loc-grid select,.council-in{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--mint)}
+.loc-meta{font-size:12px;color:var(--muted);margin-top:8px}
+.status{font-size:12px;margin-top:8px;color:var(--ink-2)}
+.status.err{color:var(--likely)}
+
+.group-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}
+.group-label:first-child{margin-top:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:500;transition:background .12s,border-color .12s}
+.chip:hover{border-color:var(--leaf)}
+.chip[aria-pressed="true"]{background:var(--forest);border-color:var(--forest);color:#fff}
+
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:9px 6px;cursor:pointer;font-weight:600;font-size:13px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--leaf-soft);color:var(--forest);box-shadow:inset 0 -3px 0 var(--leaf)}
+.seg-note{font-size:12px;color:var(--muted);margin-top:6px}
+
+.feats{display:grid;gap:2px;margin-top:4px}
+#featBox summary{list-style:none;cursor:pointer;margin-bottom:0}
+#featBox summary::-webkit-details-marker{display:none}
+#featBox summary .sub::after{content:" ▾";color:var(--leaf)}
+#featBox[open] summary .sub::after{content:" ▴"}
+#featBox[open] summary{margin-bottom:8px}
+.opt{font-size:11px;font-weight:600;color:var(--muted);margin-left:4px}
+.feat{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border-radius:8px;cursor:pointer}
+.feat:hover{background:var(--mint)}
+.feat input{margin-top:3px;accent-color:var(--forest);width:16px;height:16px;flex:none}
+.feat b{font-weight:600;display:block;font-size:13px}
+.feat small{color:var(--muted);font-size:12px}
+.feat .auto{font-size:10px;font-weight:700;color:var(--leaf);background:var(--leaf-soft);border-radius:4px;padding:1px 5px;margin-left:6px;letter-spacing:.04em;text-transform:uppercase}
+
+/* Results */
+.results{margin-top:6px}
+.empty{border:1px dashed var(--line);border-radius:var(--radius);padding:22px;text-align:center;color:var(--muted);background:#fff}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.res-head{background:var(--forest);color:#fff;border-radius:var(--radius) var(--radius) 0 0;padding:16px}
+.res-head h2{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:18px;margin:0 0 2px}
+.res-head p{margin:0;font-size:13px;opacity:.8}
+.counts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.count{background:rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;font-size:12px}
+.count b{font-size:16px;margin-right:4px}
+.res-tools{background:#fff;border:1px solid var(--line);border-top:0;border-radius:0 0 var(--radius) var(--radius);padding:10px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.res-tools .filter{display:flex;gap:4px;margin-right:auto}
+.res-tools .filter button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:600;cursor:pointer}
+.res-tools .filter button[aria-pressed="true"]{background:var(--forest);color:#fff;border-color:var(--forest)}
+.res-tools .btn{padding:5px 9px;font-size:12px}
+
+.note-box{background:var(--leaf-soft);border:1px solid #c7e2d1;border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--forest);margin-bottom:12px}
+.note-box p{margin:0}
+.note-box p+p{margin-top:6px}
+
+.level{margin-bottom:16px}
+.level-h{display:flex;align-items:baseline;gap:8px;margin:0 0 8px;padding-bottom:6px;border-bottom:2px solid var(--forest)}
+.level-h h3{margin:0;font-size:15px}
+.level-h span{font-size:12px;color:var(--muted)}
+.level-empty{font-size:12.5px;color:var(--muted);padding:6px 0}
+.item{background:#fff;border:1px solid var(--line);border-left:4px solid var(--check);border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.item.likely{border-left-color:var(--likely)}
+.item.possible{border-left-color:var(--possible)}
+.item-head{display:flex;gap:10px;align-items:flex-start}
+.item-head h4{margin:0;font-size:14px;font-weight:700;flex:1;line-height:1.35}
+.badge{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:3px 7px;white-space:nowrap}
+.badge.likely{background:var(--likely-bg);color:var(--likely)}
+.badge.possible{background:var(--possible-bg);color:var(--possible)}
+.badge.check{background:var(--check-bg);color:var(--check)}
+.item dl{display:grid;grid-template-columns:78px 1fr;gap:3px 10px;margin:8px 0 0;font-size:12.5px}
+.item dt{color:var(--muted);font-weight:600}
+.item dd{margin:0;color:var(--ink-2)}
+.why{font-size:12.5px;margin:8px 0 0;color:var(--ink)}
+.why::before{content:"Why flagged: ";font-weight:700}
+.inote{font-size:12px;margin:6px 0 0;color:var(--muted);font-style:italic}
+
+.links{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px}
+.links h3{margin:0 0 8px;font-size:14px}
+.links ul{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.links li a{font-size:13px;text-decoration:none;display:flex;gap:6px;align-items:center}
+.links li a:hover{text-decoration:underline}
+.links li a::before{content:"↗";font-size:11px;color:var(--leaf)}
+.disclaimer{font-size:11.5px;color:var(--muted);line-height:1.55;border-top:1px solid var(--line);padding-top:12px}
+
+/* Map pin */
+.pin{width:22px;height:22px;border-radius:50% 50% 50% 0;background:var(--forest);transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.map-hint{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(15,59,44,.92);color:#fff;padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:600;pointer-events:none;box-shadow:var(--shadow)}
+.map-wrap{position:relative;height:100%}
+.leaflet-container{font-family:Manrope,system-ui,sans-serif}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:46vh auto;height:auto}
+  .map-wrap{order:-1;height:46vh}
+  .panel{border-right:0;overflow:visible}
+  .title p,.pill-flags{display:none}
+}
+@media print{
+  .top,.map-wrap,.step,.res-tools .btn,.res-tools .filter{display:none!important}
+  .app{display:block;height:auto}
+  .panel{overflow:visible;border:0;padding:0}
+  .item,.links{break-inside:avoid}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/" aria-label="OENVC home">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#2f8f5b"/><path d="M9 22c0-8 6-13 15-13-1 9-6 14-13 14-1 0-1.6-.3-2-1zm2 1c2-5 5-8 9-10" fill="#e3f1e8" stroke="#0f3b2c" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="brand-word">OENVC</span>
+  </a>
+  <span class="divider"></span>
+  <div class="title">
+    <h1>Environmental Approvals Finder</h1>
+    <p>Screen likely permits for a site — federal, state and council</p>
+  </div>
+  <span class="spacer"></span>
+  <div class="pill-flags"><span>AU</span><span>NZ</span></div>
+</header>
+
+<main class="app">
+  <aside class="panel" id="panel">
+    <section class="step" aria-labelledby="s1">
+      <div class="step-h"><span class="num">1</span><h2 id="s1">Pick a location</h2><span class="sub">Click the map or search</span></div>
+      <form class="search" id="searchForm" autocomplete="off">
+        <input id="q" type="search" placeholder="Address, suburb or town in AU / NZ" aria-label="Search address">
+        <button class="btn primary" type="submit">Search</button>
+      </form>
+      <div class="status" id="status" role="status"></div>
+      <div class="loc" id="loc">
+        <div class="loc-grid">
+          <label for="jur">Jurisdiction</label>
+          <select id="jur"></select>
+          <label for="council">Council</label>
+          <input id="council" class="council-in" placeholder="Local council name">
+        </div>
+        <div class="loc-meta" id="locMeta"></div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s2">
+      <div class="step-h"><span class="num">2</span><h2 id="s2">Type of construction</h2></div>
+      <div id="types"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s3">
+      <div class="step-h"><span class="num">3</span><h2 id="s3">Project scale</h2></div>
+      <div class="seg" id="scale" role="group" aria-label="Project scale">
+        <button type="button" data-v="minor">Minor</button>
+        <button type="button" data-v="moderate">Moderate</button>
+        <button type="button" data-v="major">Major</button>
+      </div>
+      <div class="seg-note" id="scaleNote"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s4">
+      <details id="featBox">
+        <summary class="step-h"><span class="num">4</span><h2 id="s4">Site features <span class="opt">optional</span></h2><span class="sub" id="featCount">None ticked</span></summary>
+        <div class="feats" id="feats"></div>
+      </details>
+    </section>
+
+    <section class="results" id="results" aria-live="polite"></section>
+  </aside>
+
+  <div class="map-wrap">
+    <div id="map" role="application" aria-label="Map of Australia and New Zealand — click to choose a site"></div>
+    <div class="map-hint" id="mapHint">Click anywhere in Australia or New Zealand</div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ============================================================
+   Environmental Approvals Finder — rules engine (AU + NZ)
+   Pure data + logic. No DOM. Content reviewed to October 2026.
+   ============================================================ */
+
+const TYPES = {
+  dwelling:     { label: 'House / dwelling',            group: 'Buildings & land', tags: ['building', 'ground', 'small'] },
+  subdivision:  { label: 'Subdivision / multi-unit',    group: 'Buildings & land', tags: ['building', 'ground'] },
+  commercial:   { label: 'Commercial / industrial',     group: 'Buildings & land', tags: ['building', 'ground', 'industrial'] },
+  demolition:   { label: 'Demolition',                  group: 'Buildings & land', tags: ['small'] },
+  clearing:     { label: 'Land clearing / earthworks',  group: 'Buildings & land', tags: ['ground', 'large'], implies: ['veg'] },
+  road:         { label: 'Road / highway',              group: 'Transport',        tags: ['linear', 'ground', 'large', 'publicInfra'] },
+  rail:         { label: 'Rail / light rail',           group: 'Transport',        tags: ['linear', 'ground', 'large', 'publicInfra'] },
+  bridge:       { label: 'Bridge / waterway crossing',  group: 'Transport',        tags: ['ground', 'publicInfra', 'structure'], implies: ['water'] },
+  pipeline:     { label: 'Pipeline (water, gas, sewer)', group: 'Utilities',       tags: ['linear', 'ground', 'publicInfra'] },
+  wastewater:   { label: 'Water / wastewater treatment', group: 'Utilities',       tags: ['building', 'ground', 'industrial', 'publicInfra'] },
+  dam:          { label: 'Dam / water storage',         group: 'Utilities',        tags: ['ground', 'large', 'publicInfra'], implies: ['water'] },
+  telco:        { label: 'Telecommunications tower',    group: 'Utilities',        tags: ['structure', 'tall', 'small'] },
+  transmission: { label: 'Transmission line / substation', group: 'Energy',        tags: ['linear', 'ground', 'energy', 'tall', 'publicInfra'] },
+  solar:        { label: 'Solar farm',                  group: 'Energy',           tags: ['ground', 'large', 'energy'] },
+  wind:         { label: 'Wind farm (onshore)',         group: 'Energy',           tags: ['ground', 'large', 'energy', 'tall'] },
+  bess:         { label: 'Battery energy storage',      group: 'Energy',           tags: ['ground', 'energy', 'industrial'] },
+  quarry:       { label: 'Quarry / mine / extractive',  group: 'Resources & waste', tags: ['ground', 'large', 'industrial'] },
+  waste:        { label: 'Waste / resource recovery',   group: 'Resources & waste', tags: ['ground', 'industrial', 'building'] },
+  marine:       { label: 'Port, jetty, dredging',       group: 'Resources & waste', tags: ['structure', 'large'], implies: ['coast', 'water'] }
+};
+
+const FEATURES = [
+  { k: 'veg',         label: 'Native vegetation removal',                hint: 'Any clearing, lopping or removal of native plants' },
+  { k: 'species',     label: 'Threatened species or habitat likely',     hint: 'Known records, habitat trees, wetlands, hollows' },
+  { k: 'water',       label: 'In or near a waterway, wetland or floodplain', hint: 'Works in bed/banks, crossings, within ~40–100 m' },
+  { k: 'coast',       label: 'Coastal or marine environment',            hint: 'Foreshore, tidal land, below high water mark' },
+  { k: 'groundwater', label: 'Dewatering or groundwater interaction',    hint: 'Basements, trenches, piling below water table' },
+  { k: 'contam',      label: 'Potentially contaminated land',            hint: 'Former industry, fuel, fill, orchards, asbestos' },
+  { k: 'cultural',    label: 'Indigenous / Māori cultural heritage',     hint: 'Near waterways, dunes, known sites, undisturbed land' },
+  { k: 'heritage',    label: 'Historic heritage place or archaeology',   hint: 'Listed buildings, pre-1900 sites, heritage overlays' },
+  { k: 'trees',       label: 'Removing significant or urban trees',      hint: 'Council-protected, notable or regulated trees' },
+  { k: 'road',        label: 'Works in a road reserve or corridor',      hint: 'Footpaths, verges, service connections' },
+  { k: 'crown',       label: 'Crown, public or conservation land',       hint: 'Reserves, parks, foreshore, unallocated land' },
+  { k: 'noise',       label: 'Night works or nearby sensitive receivers', hint: 'Homes, schools, hospitals close to works' },
+  { k: 'cth',         label: 'Commonwealth land (airport, defence)',     hint: 'Australia only', country: 'AU' }
+];
+
+/* ---------------- Australian jurisdictions ---------------- */
+const AP = (title, law, auth, note) => ({ title, law, auth, note });
+
+const AU = {
+  VIC: {
+    name: 'Victoria',
+    plan: AP('Planning permit', 'Planning and Environment Act 1987; local planning scheme (zones, overlays, particular provisions)', 'Council (responsible authority); Minister for Planning for some major and renewable projects',
+      'Check zone and overlays in VicPlan — e.g. ESO, VPO, SLO, HO, LSIO/FO, BMO, EAO. Wind and some large solar/BESS projects may be decided by the Minister (cl. 52.32, cl. 53.22 Development Facilitation Program).'),
+    major: AP('Environment Effects Statement (EES) referral', 'Environment Effects Act 1978; Ministerial Guidelines for assessment of environmental effects', 'Minister for Planning (Department of Transport and Planning)'),
+    pollution: AP('EPA development licence, operating licence or permit', 'Environment Protection Act 2017; Environment Protection Regulations 2021 (Sch 1 prescribed activities)', 'EPA Victoria'),
+    veg: AP('Native vegetation removal permit (cl. 52.17) and offsets', 'Planning and Environment Act 1987; Guidelines for the removal, destruction or lopping of native vegetation', 'Council, with DEECA referral above thresholds'),
+    species: AP('FFG Act permit / Wildlife Act authorisation', 'Flora and Fauna Guarantee Act 1988; Wildlife Act 1975', 'DEECA'),
+    water: AP('Works on waterways permit', 'Water Act 1989', '{VIC_WATER}', 'The same authority is usually the floodplain referral authority for the planning permit.'),
+    groundwater: AP('Groundwater take / dewatering licence and bore construction licence', 'Water Act 1989 (s51 take and use licence; s67 bore construction licence)', 'Rural water corporation (e.g. Southern Rural Water, Goulburn-Murray Water)'),
+    coast: AP('Marine and Coastal Act consent', 'Marine and Coastal Act 2018', 'DEECA'),
+    ab: AP('Cultural Heritage Management Plan (CHMP) or cultural heritage permit', 'Aboriginal Heritage Act 2006; Aboriginal Heritage Regulations 2018', 'Registered Aboriginal Party (RAP) or First Peoples–State Relations',
+      'A CHMP is mandatory where a high-impact activity is in an area of cultural heritage sensitivity, or where an EES is required. Check ACHRIS.'),
+    hist: AP('Heritage permit / consent to disturb archaeology', 'Heritage Act 2017 (VHR permit; Heritage Inventory consent)', 'Heritage Victoria', 'Local heritage (Heritage Overlay) is handled through the planning permit.'),
+    contam: AP('Preliminary risk screen assessment or environmental audit', 'Environment Protection Act 2017 (duty to manage contaminated land); Ministerial Direction No. 1; EAO/EMO overlays', 'EPA-appointed environmental auditor; Council',
+      'Excavated soil must be classified and tracked as industrial waste through EPA Waste Tracker.'),
+    crown: AP('Land manager consent (Crown land)', 'Crown Land (Reserves) Act 1978; Land Act 1958; Conservation, Forests and Lands Act 1987', 'DEECA / Parks Victoria / committee of management'),
+    noise: AP('Construction noise management', 'EPA Publication 1834 Civil construction, building and demolition guide; Environment Protection Regulations 2021 (unreasonable noise)', 'EPA Victoria / Council'),
+    building: AP('Building permit', 'Building Act 1993', 'Registered building surveyor (private or municipal)'),
+    road: AP('Consent for works in a road reserve', 'Road Management Act 2004', 'Council (local roads) / Department of Transport and Planning (arterial roads)'),
+    trees: AP('Tree removal permit', 'Council local law; Vegetation Protection or Significant Landscape Overlay', 'Council'),
+    dam: AP('Licence to construct or alter a dam', 'Water Act 1989 (s67)', 'Rural water corporation'),
+    duty: AP('General environmental duty (no permit — ongoing obligation)', 'Environment Protection Act 2017 s25', 'EPA Victoria'),
+    extraLocal: [
+      { when: c => c.has('building') || c.type === 'demolition', lik: 'likely', item: AP('Asset protection permit', 'Council local law', 'Council', 'Most Victorian councils require this before building or demolition works start, to protect footpaths, kerbs and drains.'), why: 'Building or demolition works near council assets' },
+      { when: c => c.type === 'dwelling', lik: 'possible', item: AP('Onsite wastewater (septic) permit', 'Environment Protection Act 2017; Environment Protection Regulations 2021', 'Council'), why: 'Required if the site is not connected to reticulated sewer' }
+    ],
+    links: [
+      ['VicPlan — zones and overlays', 'https://mapshare.vic.gov.au/vicplan/'],
+      ['Planning schemes online', 'https://planning-schemes.app.planning.vic.gov.au/'],
+      ['NatureKit — biodiversity mapping', 'https://www.environment.vic.gov.au/biodiversity/naturekit'],
+      ['ACHRIS — Aboriginal cultural heritage', 'https://www.firstpeoplesrelations.vic.gov.au/achris'],
+      ['Victorian Heritage Database', 'https://vhd.heritagecouncil.vic.gov.au/'],
+      ['EPA Victoria', 'https://www.epa.vic.gov.au/'],
+      ['Victorian legislation', 'https://www.legislation.vic.gov.au/']
+    ]
+  },
+
+  NSW: {
+    name: 'New South Wales',
+    plan: AP('Development consent (DA) or complying development certificate (CDC)', 'Environmental Planning and Assessment Act 1979 Part 4 (as amended by the Planning System Reforms Act 2025); local environmental plan and SEPPs', 'Council / local planning panel, or a registered certifier for a CDC',
+      'Public authority infrastructure (roads, rail, utilities) may instead proceed under Division 5.1 with a Review of Environmental Factors (REF) — see SEPP (Transport and Infrastructure) 2021. Integrated development approvals are now coordinated through the Development Coordination Authority.'),
+    major: AP('State significant development (SSD) or infrastructure (SSI)', 'EP&A Act 1979 Div 4.7 / Div 5.2; SEPP (Planning Systems) 2021', 'Minister for Planning / Independent Planning Commission (assessed by the Department of Planning, Housing and Infrastructure)',
+      'Large solar and wind farms are commonly SSD (capital investment value thresholds apply).'),
+    pollution: AP('Environment protection licence (EPL)', 'Protection of the Environment Operations Act 1997 (Sch 1 scheduled activities)', 'NSW EPA'),
+    veg: AP('Biodiversity assessment — BOS entry, BDAR and offsets', 'Biodiversity Conservation Act 2016; Local Land Services Act 2013 (rural land); SEPP (Biodiversity and Conservation) 2021 Ch 2 (urban land)', 'Consent authority / NSW DCCEEW; Native Vegetation Panel for urban clearing above the BOS threshold without a DA'),
+    species: AP('Test of significance / biodiversity conservation licence', 'Biodiversity Conservation Act 2016 (s7.3 test of significance; Part 2 licences)', 'NSW DCCEEW'),
+    water: AP('Controlled activity approval and fisheries permits', 'Water Management Act 2000 (controlled activities on waterfront land); Fisheries Management Act 1994 (dredging/reclamation, blocking fish passage, harming marine vegetation)', 'Natural Resources Access Regulator / NSW DCCEEW (Water); NSW DPIRD Fisheries'),
+    groundwater: AP('Water access licence / water supply work approval for dewatering', 'Water Management Act 2000', 'WaterNSW / Natural Resources Access Regulator'),
+    coast: AP('Coastal management area assessment; Crown land licence for foreshore works', 'Coastal Management Act 2016; SEPP (Resilience and Hazards) 2021 Ch 2; Crown Land Management Act 2016', 'Consent authority / Crown Lands'),
+    ab: AP('Aboriginal Heritage Impact Permit (AHIP)', 'National Parks and Wildlife Act 1974 Part 6; Due Diligence Code of Practice', 'Heritage NSW', 'Search AHIMS and follow the Due Diligence Code before ground disturbance.'),
+    hist: AP('Heritage Act approval / excavation permit', 'Heritage Act 1977 (s60 approval; s140 excavation permit)', 'Heritage Council of NSW / Heritage NSW', 'Locally listed items are handled through the DA.'),
+    contam: AP('Contamination assessment / remediation consent', 'SEPP (Resilience and Hazards) 2021 Ch 4; Contaminated Land Management Act 1997', 'Consent authority; NSW EPA for significantly contaminated land', 'Category 1 remediation works need development consent.'),
+    crown: AP('Crown land licence / land manager consent', 'Crown Land Management Act 2016; National Parks and Wildlife Act 1974', 'Crown Lands / NPWS'),
+    noise: AP('Construction noise management', 'NSW EPA construction noise guidance (Interim Construction Noise Guideline); POEO Act 1997', 'NSW EPA / Council'),
+    building: AP('Construction certificate and occupation certificate', 'EP&A Act 1979 Part 6', 'Council or registered certifier'),
+    road: AP('Section 138 road works consent', 'Roads Act 1993 s138', 'Council / Transport for NSW (classified roads)'),
+    trees: AP('Tree / vegetation permit', 'SEPP (Biodiversity and Conservation) 2021 Ch 2; council DCP', 'Council'),
+    dam: AP('Dam safety and water approvals', 'Dams Safety Act 2015; Water Management Act 2000', 'Dams Safety NSW; WaterNSW'),
+    duty: AP('Pollution offences and incident notification (no permit — ongoing obligation)', 'Protection of the Environment Operations Act 1997 (incl. s120 water pollution; Part 5.7 notification)', 'NSW EPA'),
+    extraLocal: [
+      { when: c => c.type === 'dwelling', lik: 'possible', item: AP('Onsite sewage management approval', 'Local Government Act 1993 s68', 'Council'), why: 'Required if the site is not connected to reticulated sewer' }
+    ],
+    links: [
+      ['NSW Planning Portal spatial viewer', 'https://www.planningportal.nsw.gov.au/spatialviewer'],
+      ['Biodiversity Values Map (BOSET)', 'https://www.lmbc.nsw.gov.au/Maps/index.html?viewer=BOSETapp'],
+      ['Heritage NSW (AHIMS, State Heritage Register)', 'https://www.heritage.nsw.gov.au/'],
+      ['NSW EPA — contaminated land', 'https://www.epa.nsw.gov.au/your-environment/contaminated-land'],
+      ['NSW legislation', 'https://legislation.nsw.gov.au/']
+    ]
+  },
+
+  QLD: {
+    name: 'Queensland',
+    plan: AP('Development approval (material change of use / operational work)', 'Planning Act 2016; Planning Regulation 2017; local planning scheme', 'Council (assessment manager); SARA as referral agency for state matters',
+      'Wind farms and large solar farms are impact assessable and attract social impact assessment requirements following 2025 reforms.'),
+    major: AP('Coordinated project / environmental impact statement', 'State Development and Public Works Organisation Act 1971; Environmental Protection Act 1994 Ch 3', 'Coordinator-General / DETSI'),
+    pollution: AP('Environmental authority (EA) for an environmentally relevant activity (ERA)', 'Environmental Protection Act 1994; Environmental Protection Regulation 2019 Sch 2', 'DETSI, or council for devolved ERAs', 'Includes temporary activities on construction projects such as concrete batching, crushing and screening.'),
+    veg: AP('Vegetation clearing approval (operational work)', 'Vegetation Management Act 1999; Planning Act 2016', 'SARA / Queensland Government vegetation management', 'Check the regulated vegetation management map and whether an exemption or accepted development code applies.'),
+    species: AP('Protected plants clearing permit / species management program', 'Nature Conservation Act 1992; Nature Conservation (Plants) Regulation 2020; Nature Conservation (Animals) Regulation 2020', 'DETSI', 'Check the flora survey trigger map. Tampering with an active animal breeding place needs a species management program.'),
+    water: AP('Riverine protection permit / waterway barrier works', 'Water Act 2000 (riverine protection); Fisheries Act 1994 and Planning Act 2016 (waterway barrier works, marine plants)', 'Queensland Government (water) / SARA (fisheries)', 'Many works can proceed as accepted development if the relevant requirements are met.'),
+    groundwater: AP('Water licence or entitlement for take (dewatering)', 'Water Act 2000; relevant water plan', 'Queensland Government (water)'),
+    coast: AP('Prescribed tidal work / development in a coastal management district', 'Coastal Protection and Management Act 1995; Planning Act 2016', 'Council (tidal works) / SARA / DETSI'),
+    ab: AP('Cultural heritage duty of care / Cultural Heritage Management Plan', 'Aboriginal Cultural Heritage Act 2003; Torres Strait Islander Cultural Heritage Act 2003', 'Aboriginal or Torres Strait Islander party for the area; Queensland Government cultural heritage unit',
+      'A CHMP is required where an EIS is required; otherwise duty of care guidelines apply.'),
+    hist: AP('Development on a Queensland heritage place', 'Queensland Heritage Act 1992; Planning Act 2016 (SARA referral)', 'DETSI (Heritage) via SARA'),
+    contam: AP('Contaminated land — site investigation and soil disposal permit', 'Environmental Protection Act 1994 Ch 7 Part 8 (EMR/CLR)', 'DETSI; SARA referral for development on listed land', 'A disposal permit is needed to remove soil from land on the EMR/CLR.'),
+    crown: AP('State land / protected area permit', 'Land Act 1994; Nature Conservation Act 1992', 'Queensland Government (land) / Queensland Parks and Wildlife Service'),
+    noise: AP('Building work noise hours', 'Environmental Protection Act 1994 s440R', 'Council / DETSI', 'Audible building work is generally restricted to 6:30am–6:30pm Monday to Saturday.'),
+    building: AP('Building development approval', 'Building Act 1975', 'Private building certifier or council'),
+    road: AP('Road corridor permit', 'Transport Infrastructure Act 1994 s33 (state-controlled roads); council local law (local roads)', 'Department of Transport and Main Roads / Council'),
+    trees: AP('Vegetation protection local law approval', 'Council local law / planning scheme overlay', 'Council'),
+    dam: AP('Referable dam approval', 'Water Supply (Safety and Reliability) Act 2008; Planning Act 2016', 'Queensland Government (dam safety)'),
+    duty: AP('General environmental duty and duty to notify (no permit — ongoing obligation)', 'Environmental Protection Act 1994 s319, s320', 'DETSI'),
+    extraLocal: [],
+    links: [
+      ['Queensland Globe', 'https://qldglobe.information.qld.gov.au/'],
+      ['Protected plants flora survey trigger map', 'https://www.qld.gov.au/environment/plants-animals/plants/protected-plants/map-request'],
+      ['EMR / CLR search', 'https://www.qld.gov.au/environment/pollution/management/contaminated-land/search'],
+      ['Aboriginal and Torres Strait Islander cultural heritage', 'https://www.qld.gov.au/firstnations/environment-land-use-native-title/cultural-heritage'],
+      ['Queensland legislation', 'https://www.legislation.qld.gov.au/']
+    ]
+  },
+
+  WA: {
+    name: 'Western Australia',
+    plan: AP('Development approval', 'Planning and Development Act 2005; local planning scheme; Planning and Development (Local Planning Schemes) Regulations 2015', 'Local government; Development Assessment Panel or the State Development Assessment Unit for significant development'),
+    major: AP('EPA referral and assessment (Part IV)', 'Environmental Protection Act 1986 Part IV (s38)', 'EPA WA / Minister for Environment'),
+    pollution: AP('Works approval and licence (prescribed premises)', 'Environmental Protection Act 1986 Part V Div 3; Environmental Protection Regulations 1987 Sch 1', 'DWER'),
+    veg: AP('Native vegetation clearing permit', 'Environmental Protection Act 1986 Part V Div 2; Environmental Protection (Clearing of Native Vegetation) Regulations 2004', 'DWER (or the mining regulator for mining and petroleum activities)'),
+    species: AP('Authorisation to take or disturb threatened species', 'Biodiversity Conservation Act 2016', 'DBCA'),
+    water: AP('Bed and banks permit / water licence', 'Rights in Water and Irrigation Act 1914', 'DWER'),
+    groundwater: AP('Licence to take water (s5C) and bore licence (s26D)', 'Rights in Water and Irrigation Act 1914', 'DWER'),
+    coast: AP('Coastal planning and marine works approvals', 'State Planning Policy 2.6 Coastal Planning; Jetties Act 1926', 'Local government / WAPC; Department of Transport'),
+    ab: AP('Section 18 consent / Aboriginal heritage approvals', 'Aboriginal Heritage Act 1972 (as amended in 2023)', 'Minister for Aboriginal Affairs / DPLH', 'Search ACHIS and consult Traditional Owners before ground disturbance.'),
+    hist: AP('Referral of works affecting a State Register place', 'Heritage Act 2018', 'Heritage Council of WA'),
+    contam: AP('Reporting and classification of contaminated sites', 'Contaminated Sites Act 2003', 'DWER'),
+    crown: AP('Crown land / conservation estate consent', 'Land Administration Act 1997; Conservation and Land Management Act 1984', 'DPLH / DBCA'),
+    noise: AP('Construction noise outside permitted hours', 'Environmental Protection (Noise) Regulations 1997 reg 13', 'Local government CEO', 'Construction outside 7am–7pm Monday to Saturday generally needs an approved noise management plan.'),
+    building: AP('Building permit', 'Building Act 2011', 'Local government (permit authority)'),
+    road: AP('Works in road reserve approval', 'Main Roads Act 1930 (state roads); Local Government Act 1995 (local roads)', 'Main Roads WA / Local government'),
+    trees: AP('Tree removal approval', 'Local planning scheme / local planning policy', 'Local government'),
+    dam: AP('Water and dam approvals', 'Rights in Water and Irrigation Act 1914', 'DWER'),
+    duty: AP('Pollution offences (no permit — ongoing obligation)', 'Environmental Protection Act 1986 s49, s50', 'DWER'),
+    extraLocal: [],
+    links: [
+      ['PlanWA', 'https://espatial.dplh.wa.gov.au/PlanWA/'],
+      ['NatureMap', 'https://naturemap.dbca.wa.gov.au/'],
+      ['ACHIS — Aboriginal cultural heritage', 'https://achknowledge.dplh.wa.gov.au/'],
+      ['Contaminated sites database', 'https://www.wa.gov.au/service/environment/environment-information-services/contaminated-sites-database'],
+      ['WA legislation', 'https://www.legislation.wa.gov.au/']
+    ]
+  },
+
+  SA: {
+    name: 'South Australia',
+    plan: AP('Development approval (planning consent + building rules consent)', 'Planning, Development and Infrastructure Act 2016; Planning and Design Code', 'Council assessment panel / assessment manager / accredited professional; State Commission Assessment Panel for some development'),
+    major: AP('Impact assessed (declared) development / EIS', 'Planning, Development and Infrastructure Act 2016', 'Minister for Planning'),
+    pollution: AP('EPA licence (prescribed activity of environmental significance)', 'Environment Protection Act 1993 Sch 1', 'EPA South Australia'),
+    veg: AP('Native vegetation clearance approval and SEB offset', 'Native Vegetation Act 1991; Native Vegetation Regulations 2017', 'Native Vegetation Council'),
+    species: AP('Native plant or animal permit', 'National Parks and Wildlife Act 1972', 'Department for Environment and Water'),
+    water: AP('Water affecting activity permit', 'Landscape South Australia Act 2019', 'Landscape board / Department for Environment and Water'),
+    groundwater: AP('Water licence / well construction permit', 'Landscape South Australia Act 2019', 'Department for Environment and Water'),
+    coast: AP('Coast Protection Board referral', 'Planning, Development and Infrastructure Act 2016; Coast Protection Act 1972', 'Coast Protection Board'),
+    ab: AP('Section 23 authorisation to damage, disturb or interfere', 'Aboriginal Heritage Act 1988', 'Premier (Aboriginal Affairs and Reconciliation)'),
+    hist: AP('State heritage place referral', 'Heritage Places Act 1993; PDI Act 2016', 'Heritage South Australia'),
+    contam: AP('Site contamination assessment / audit', 'Environment Protection Act 1993 Part 10A', 'EPA South Australia'),
+    crown: AP('Crown land / reserve consent', 'Crown Land Management Act 2009; National Parks and Wildlife Act 1972', 'Department for Environment and Water'),
+    noise: AP('Construction noise hours', 'Environment Protection (Noise) Policy 2007', 'EPA South Australia / Council', 'Construction noise is generally limited to 7am–7pm Monday to Saturday.'),
+    building: AP('Building rules consent', 'Planning, Development and Infrastructure Act 2016', 'Council or accredited professional'),
+    road: AP('Authorisation to alter a public road', 'Local Government Act 1999 s221', 'Council / Department for Infrastructure and Transport (state roads)'),
+    trees: AP('Regulated or significant tree approval', 'Planning, Development and Infrastructure Act 2016; Planning and Design Code', 'Council'),
+    dam: AP('Water affecting activity permit (dams)', 'Landscape South Australia Act 2019', 'Landscape board'),
+    duty: AP('General environmental duty (no permit — ongoing obligation)', 'Environment Protection Act 1993 s25', 'EPA South Australia'),
+    extraLocal: [],
+    links: [
+      ['SAPPA — property and planning atlas', 'https://sappa.plan.sa.gov.au/'],
+      ['PlanSA', 'https://plan.sa.gov.au/'],
+      ['NatureMaps', 'https://www.environment.sa.gov.au/topics/mapping/naturemaps'],
+      ['SA legislation', 'https://www.legislation.sa.gov.au/']
+    ]
+  },
+
+  TAS: {
+    name: 'Tasmania',
+    plan: AP('Planning permit', 'Land Use Planning and Approvals Act 1993; Tasmanian Planning Scheme (Local Provisions Schedule)', 'Council (planning authority)'),
+    major: AP('Level 2 activity assessment / major project assessment', 'Environmental Management and Pollution Control Act 1994; LUPAA major projects; State Policies and Projects Act 1993', 'Board of the EPA; Tasmanian Planning Commission'),
+    pollution: AP('Level 2 activity permit conditions / environment protection notice', 'Environmental Management and Pollution Control Act 1994 Sch 2', 'EPA Tasmania (Level 2) / Council (Level 1)'),
+    veg: AP('Forest practices plan / Natural Assets Code', 'Forest Practices Act 1985; Tasmanian Planning Scheme Natural Assets Code', 'Forest Practices Authority; Council'),
+    species: AP('Threatened species permit', 'Threatened Species Protection Act 1995; Nature Conservation Act 2002', 'NRE Tasmania'),
+    water: AP('Water licence / works in waterways', 'Water Management Act 1999; Inland Fisheries Act 1995', 'NRE Tasmania'),
+    groundwater: AP('Groundwater licence / bore permit', 'Water Management Act 1999', 'NRE Tasmania'),
+    coast: AP('Coastal works and Crown foreshore licence', 'State Coastal Policy 1996; Crown Lands Act 1976', 'NRE Tasmania / Council'),
+    ab: AP('Aboriginal heritage permit', 'Aboriginal Heritage Act 1975', 'Aboriginal Heritage Tasmania'),
+    hist: AP('Heritage works approval', 'Historic Cultural Heritage Act 1995', 'Tasmanian Heritage Council / Heritage Tasmania'),
+    contam: AP('Contaminated land assessment', 'EMPCA 1994 Part 5A; Tasmanian Planning Scheme Potentially Contaminated Land Code', 'EPA Tasmania / Council'),
+    crown: AP('Crown land / reserve authority', 'Crown Lands Act 1976; National Parks and Reserves Management Act 2002', 'NRE Tasmania / Parks and Wildlife Service'),
+    noise: AP('Construction noise hours', 'Environmental Management and Pollution Control (Noise) Regulations 2016', 'Council / EPA Tasmania'),
+    building: AP('Building permit', 'Building Act 2016', 'Building surveyor / permit authority'),
+    road: AP('Works in road reserve consent', 'Local Highways Act 1982; Roads and Jetties Act 1935', 'Council / State Roads'),
+    trees: AP('Significant tree approval', 'Tasmanian Planning Scheme (local provisions)', 'Council'),
+    dam: AP('Dam works permit', 'Water Management Act 1999 Part 8', 'NRE Tasmania'),
+    duty: AP('General environmental duty (no permit — ongoing obligation)', 'Environmental Management and Pollution Control Act 1994 s23A', 'EPA Tasmania'),
+    extraLocal: [],
+    links: [
+      ['LISTmap', 'https://maps.thelist.tas.gov.au/listmap/app/list/map'],
+      ['Natural Values Atlas', 'https://www.naturalvaluesatlas.tas.gov.au/'],
+      ['Aboriginal Heritage Tasmania', 'https://www.aboriginalheritage.tas.gov.au/'],
+      ['Tasmanian legislation', 'https://www.legislation.tas.gov.au/']
+    ]
+  },
+
+  NT: {
+    name: 'Northern Territory',
+    planAtState: true,
+    plan: AP('Development permit', 'Planning Act 1999; NT Planning Scheme 2020', 'Development Consent Authority (NT Government, not council)'),
+    major: AP('Environmental impact assessment (referral)', 'Environment Protection Act 2019; Environment Protection Regulations 2020', 'NT EPA / Minister for Environment'),
+    pollution: AP('Environment protection approval or licence', 'Waste Management and Pollution Control Act 1998 (Sch 2 activities)', 'NT EPA'),
+    veg: AP('Native vegetation clearing approval', 'Planning Act 1999 (clearing over 1 ha); Pastoral Land Act 1992 (pastoral leases)', 'Development Consent Authority / Pastoral Land Board'),
+    species: AP('Wildlife permit', 'Territory Parks and Wildlife Conservation Act 1976', 'NT Government (Parks and Wildlife)'),
+    water: AP('Waterway works permit / water extraction licence', 'Water Act 1992', 'NT Government (water resources)'),
+    groundwater: AP('Bore construction permit / water extraction licence', 'Water Act 1992', 'NT Government (water resources)'),
+    coast: AP('Coastal and Crown land approvals', 'Planning Act 1999; Crown Lands Act 1992', 'NT Government'),
+    ab: AP('Authority Certificate (sacred sites)', 'Northern Territory Aboriginal Sacred Sites Act 1989', 'Aboriginal Areas Protection Authority (AAPA)', 'An Authority Certificate protects proponents who comply with its conditions.'),
+    hist: AP('Heritage works approval', 'Heritage Act 2011', 'NT Heritage Council / NT Government'),
+    contam: AP('Contamination assessment', 'Waste Management and Pollution Control Act 1998', 'NT EPA'),
+    crown: AP('Crown land approval', 'Crown Lands Act 1992', 'NT Government'),
+    noise: AP('Construction noise management', 'Waste Management and Pollution Control Act 1998; NT EPA noise guidelines', 'NT EPA'),
+    building: AP('Building permit', 'Building Act 1993', 'Registered building certifier'),
+    road: AP('Works in road reserve permit', 'Control of Roads Act 1953 (NT roads); local council by-laws', 'NT Government / Council'),
+    trees: AP('Tree removal (council by-laws)', 'Local council by-laws', 'Council'),
+    dam: AP('Water and dam approvals', 'Water Act 1992', 'NT Government (water resources)'),
+    duty: AP('General environmental duty (no permit — ongoing obligation)', 'Waste Management and Pollution Control Act 1998 s12', 'NT EPA'),
+    extraLocal: [],
+    links: [
+      ['NR Maps', 'https://nrmaps.nt.gov.au/'],
+      ['NT Atlas', 'https://ntlis.nt.gov.au/'],
+      ['Aboriginal Areas Protection Authority', 'https://www.aapant.org.au/'],
+      ['NT legislation', 'https://legislation.nt.gov.au/']
+    ]
+  },
+
+  ACT: {
+    name: 'Australian Capital Territory',
+    planAtState: true,
+    noCouncils: true,
+    plan: AP('Development approval', 'Planning Act 2023; Territory Plan 2023', 'Territory Planning Authority'),
+    major: AP('Environmental impact statement (EIS)', 'Planning Act 2023', 'Territory Planning Authority'),
+    pollution: AP('Environmental authorisation', 'Environment Protection Act 1997 (Sch 1 Class A/B activities)', 'ACT EPA'),
+    veg: AP('Clearing / tree damage approval', 'Nature Conservation Act 2014; Urban Forest Act 2023', 'Conservator of Flora and Fauna'),
+    species: AP('Nature conservation licence', 'Nature Conservation Act 2014', 'Conservator of Flora and Fauna'),
+    water: AP('Waterway work licence', 'Water Resources Act 2007', 'ACT EPA'),
+    groundwater: AP('Bore / water access licence', 'Water Resources Act 2007', 'ACT EPA'),
+    ab: AP('Aboriginal places and objects approval', 'Heritage Act 2004', 'ACT Heritage Council (with Representative Aboriginal Organisations)'),
+    hist: AP('Heritage approval', 'Heritage Act 2004', 'ACT Heritage Council'),
+    contam: AP('Contaminated land assessment', 'Environment Protection Act 1997', 'ACT EPA'),
+    crown: AP('Public unleased land permit', 'Public Unleased Land Act 2013', 'ACT Government (City Services)'),
+    noise: AP('Noise zone standards', 'Environment Protection Regulation 2005', 'ACT EPA'),
+    building: AP('Building approval', 'Building Act 2004', 'Licensed building certifier'),
+    road: AP('Works on public land / road reserve', 'Public Unleased Land Act 2013', 'ACT Government (City Services)'),
+    trees: AP('Tree damage approval', 'Urban Forest Act 2023', 'Conservator of Flora and Fauna'),
+    dam: AP('Water approvals', 'Water Resources Act 2007', 'ACT EPA'),
+    duty: AP('General environmental duty (no permit — ongoing obligation)', 'Environment Protection Act 1997 s22', 'ACT EPA'),
+    extraLocal: [],
+    links: [
+      ['ACTmapi', 'https://actmapi.act.gov.au/'],
+      ['ACT Planning', 'https://www.planning.act.gov.au/'],
+      ['ACT legislation', 'https://www.legislation.act.gov.au/']
+    ]
+  }
+};
+
+const AU_CODES = { 'Victoria': 'VIC', 'New South Wales': 'NSW', 'Queensland': 'QLD', 'Western Australia': 'WA', 'South Australia': 'SA', 'Tasmania': 'TAS', 'Northern Territory': 'NT', 'Australian Capital Territory': 'ACT' };
+
+/* ---------------- New Zealand regions ---------------- */
+const NZ_REGIONS = [
+  { k: 'Northland',          rc: 'Northland Regional Council' },
+  { k: 'Auckland',           rc: 'Auckland Council', unitary: true },
+  { k: 'Waikato',            rc: 'Waikato Regional Council' },
+  { k: 'Bay of Plenty',      rc: 'Bay of Plenty Regional Council (Toi Moana)' },
+  { k: 'Gisborne',           rc: 'Gisborne District Council', unitary: true },
+  { k: "Hawke's Bay",        rc: "Hawke's Bay Regional Council", match: /hawke/i },
+  { k: 'Taranaki',           rc: 'Taranaki Regional Council' },
+  { k: 'Manawatū-Whanganui', rc: 'Horizons Regional Council', match: /manawat/i },
+  { k: 'Wellington',         rc: 'Greater Wellington Regional Council' },
+  { k: 'Tasman',             rc: 'Tasman District Council', unitary: true },
+  { k: 'Nelson',             rc: 'Nelson City Council', unitary: true },
+  { k: 'Marlborough',        rc: 'Marlborough District Council', unitary: true },
+  { k: 'West Coast',         rc: 'West Coast Regional Council' },
+  { k: 'Canterbury',         rc: 'Environment Canterbury' },
+  { k: 'Otago',              rc: 'Otago Regional Council' },
+  { k: 'Southland',          rc: 'Environment Southland' },
+  { k: 'Chatham Islands',    rc: 'Chatham Islands Council', unitary: true, match: /chatham/i }
+];
+
+function nzRegionFromName(s) {
+  if (!s) return null;
+  return NZ_REGIONS.find(r => (r.match ? r.match.test(s) : s.toLowerCase().includes(r.k.toLowerCase()))) || null;
+}
+
+const NZ_LINKS = [
+  ['ArchSite — NZAA site recording scheme', 'https://archsite.org.nz/'],
+  ['Heritage New Zealand Pouhere Taonga', 'https://www.heritage.org.nz/'],
+  ['DOC — permits and concessions', 'https://www.doc.govt.nz/get-involved/apply-for-permits/'],
+  ['Te Kāhui Māngai — iwi directory', 'https://www.tkm.govt.nz/'],
+  ['Fast-track approvals', 'https://www.fasttrack.govt.nz/'],
+  ['planning.govt.nz — new planning system', 'https://www.planning.govt.nz/'],
+  ['NZ legislation', 'https://www.legislation.govt.nz/']
+];
+
+const AU_FED_LINKS = [
+  ['Protected Matters Search Tool (EPBC)', 'https://www.dcceew.gov.au/environment/epbc/protected-matters-search-tool'],
+  ['EPBC Act public portal', 'https://epbcpublicportal.environment.gov.au/'],
+  ['National Native Title Tribunal', 'https://www.nntt.gov.au/'],
+  ['Federal legislation', 'https://www.legislation.gov.au/']
+];
+
+/* ---------------- context helpers ---------------- */
+function makeCtx(input) {
+  const t = TYPES[input.type];
+  const tags = new Set(t ? t.tags : []);
+  const f = new Set(input.features || []);
+  (t && t.implies || []).forEach(x => f.add(x));
+  const c = {
+    country: input.country, jur: input.jur, type: input.type, t, scale: input.scale || 'moderate',
+    lat: input.lat, lng: input.lng, council: input.council || '', offshore: !!input.offshore,
+    tags, f,
+    has: k => tags.has(k),
+    F: k => f.has(k),
+    isType: (...ks) => ks.includes(input.type)
+  };
+  c.big = c.scale !== 'minor';
+  return c;
+}
+
+const R = (lik, why) => ({ lik, why });
+
+/* ---------------- Australian federal rules ---------------- */
+const AU_FED = [
+  {
+    item: AP('EPBC Act referral (matters of national environmental significance)', 'Environment Protection and Biodiversity Conservation Act 1999; EPBC Regulations 2025', 'Minister for the Environment / National Environmental Protection Agency (NEPA)',
+      'The National EPA has operated since 1 July 2026. The remaining EPBC reform amendments, including application of National Environmental Standards to assessments, commence by 1 December 2026. Use the Protected Matters Search Tool to self-assess.'),
+    when: c => {
+      if (c.offshore) return R('likely', 'Works in Commonwealth marine waters');
+      if (c.F('species')) return R('likely', 'Threatened species or habitat flagged');
+      if (c.scale === 'major') return R('likely', 'Major-scale project');
+      if (c.type === 'wind') return R('likely', 'Wind farms commonly affect listed birds and bats');
+      if (c.has('large') && c.F('veg')) return R('likely', 'Large footprint with native vegetation removal');
+      if (c.F('veg') || c.F('water') || c.F('coast') || c.has('large') || c.has('linear')) return R('possible', 'Project type or site features could affect protected matters');
+      return null;
+    }
+  },
+  {
+    item: AP('EPBC water trigger (coal seam gas / large coal mining)', 'EPBC Act 1999 s24D–24E', 'Minister for the Environment'),
+    when: c => c.type === 'quarry' && c.big ? R('possible', 'Applies only if the project is coal seam gas or large coal mining') : null
+  },
+  {
+    item: AP('Commonwealth land approvals', 'EPBC Act 1999 s26–28; Airports Act 1996 (building activity on leased federal airports)', 'Commonwealth land manager / airport lessee / Department of Infrastructure'),
+    when: c => c.F('cth') ? R('likely', 'Commonwealth land flagged') : null
+  },
+  {
+    item: AP('Native title — future act procedures', 'Native Title Act 1993', 'Native title holders / Registered Native Title Body Corporate; National Native Title Tribunal',
+      'Freehold land generally extinguishes native title; Crown land, reserves, waterways and the sea bed may not.'),
+    when: c => {
+      if (c.F('crown') || c.offshore || c.type === 'marine') return R('likely', 'Crown land or waters where native title may exist');
+      if (c.has('linear') || (c.has('large') && c.big)) return R('possible', 'Large or linear projects often cross land where native title may exist');
+      return null;
+    }
+  },
+  {
+    item: AP('Aboriginal and Torres Strait Islander heritage protection', 'Aboriginal and Torres Strait Islander Heritage Protection Act 1984', 'Minister for the Environment', 'A backstop where state protection is inadequate — usually managed through state heritage processes.'),
+    when: c => c.F('cultural') ? R('check', 'Cultural heritage sensitivity flagged') : null
+  },
+  {
+    item: AP('Aboriginal Land Rights — land council consent', 'Aboriginal Land Rights (Northern Territory) Act 1976', 'Relevant Land Council (e.g. Northern Land Council, Central Land Council)'),
+    when: c => c.jur === 'NT' && (c.F('crown') || c.has('large') || c.has('linear')) ? R('possible', 'Applies if works are on or access Aboriginal land in the NT') : null
+  },
+  {
+    item: AP('National Capital Authority works approval', 'Australian Capital Territory (Planning and Land Management) Act 1988', 'National Capital Authority', 'Required for works in Designated Areas and on National Land.'),
+    when: c => c.jur === 'ACT' ? R('possible', 'Check whether the site is in a Designated Area or on National Land') : null
+  },
+  {
+    item: AP('Sea dumping permit', 'Environment Protection (Sea Dumping) Act 1981', 'National Environmental Protection Agency (NEPA)'),
+    when: c => c.type === 'marine' ? R('likely', 'Dredge spoil or material disposed of at sea') : (c.offshore ? R('possible', 'Any placement of material on the sea bed') : null)
+  },
+  {
+    item: AP('Great Barrier Reef Marine Park permit', 'Great Barrier Reef Marine Park Act 1975', 'Great Barrier Reef Marine Park Authority (with Queensland Parks and Wildlife Service for joint permits)'),
+    when: c => {
+      const inReef = c.jur === 'QLD' && c.lat != null && c.lat < -10.5 && c.lat > -24.6 && c.lng > 142;
+      if (!inReef) return null;
+      if (c.type === 'marine' || (c.offshore)) return R('likely', 'Marine works within the Great Barrier Reef region');
+      if (c.F('coast')) return R('possible', 'Coastal works adjacent to the Great Barrier Reef Marine Park');
+      return null;
+    }
+  },
+  {
+    item: AP('Underwater cultural heritage permit', 'Underwater Cultural Heritage Act 2018', 'Department of Climate Change, Energy, the Environment and Water'),
+    when: c => c.type === 'marine' || c.offshore ? R('possible', 'Shipwrecks, aircraft and other protected underwater heritage') : null
+  },
+  {
+    item: AP('Offshore renewable energy feasibility / commercial licence', 'Offshore Electricity Infrastructure Act 2021', 'Minister for Climate Change and Energy; Offshore Infrastructure Regulator (NOPSEMA)'),
+    when: c => c.offshore && (c.type === 'wind' || c.type === 'transmission') ? R('likely', 'Offshore electricity infrastructure in Commonwealth waters') : null
+  },
+  {
+    item: AP('Offshore pipeline licence', 'Offshore Petroleum and Greenhouse Gas Storage Act 2006', 'NOPTA / NOPSEMA'),
+    when: c => c.offshore && c.type === 'pipeline' ? R('likely', 'Pipeline in Commonwealth waters') : null
+  },
+  {
+    item: AP('Airspace — tall structure assessment', 'Airports (Protection of Airspace) Regulations 1996; Civil Aviation Safety Regulations 1998', 'Airport operator / CASA / Airservices Australia', 'Not an environmental approval, but often on the critical path for turbines, towers and cranes.'),
+    when: c => c.has('tall') ? R('possible', 'Tall structures near airports or over 110 m need aviation assessment') : null
+  },
+  {
+    item: AP('Low-impact facility assessment', 'Telecommunications Act 1997; Telecommunications (Low-impact Facilities) Determination 2018', 'Carrier (self-assessed); ACMA', 'If the facility is not low-impact, state/local planning approval applies.'),
+    when: c => c.type === 'telco' ? R('possible', 'Some facilities are exempt from state planning approval') : null
+  }
+];
+
+/* ---------------- Australian state/territory rules ---------------- */
+function auStateRules(c, J) {
+  const out = [];
+  const push = (key, r, level, override) => {
+    const base = override || J[key];
+    if (!r || !base) return;
+    out.push(Object.assign({ key, level }, base, r));
+  };
+
+  // Planning approval (state level for NT/ACT, otherwise council)
+  let pr = null;
+  if (c.isType('dwelling', 'demolition')) pr = R('possible', 'May be exempt or complying development depending on zone, overlays and heritage');
+  else if (c.type === 'telco') pr = R('possible', 'Required unless a low-impact facility');
+  else if (c.has('publicInfra') && c.jur === 'NSW') pr = R('possible', 'Public authority projects may use the Division 5.1 REF pathway instead');
+  else pr = R('likely', 'Most new development of this type needs planning approval');
+  push('plan', pr, J.planAtState ? 'state' : 'local');
+
+  // Major project / EIA
+  if (c.scale === 'major') push('major', R('likely', 'Major / state-significant scale selected'), 'state');
+  else if (c.scale === 'moderate' && (c.has('large') || c.isType('waste', 'quarry', 'marine'))) push('major', R('possible', 'Check referral and significance thresholds for this project type'), 'state');
+
+  // Pollution licence
+  if (c.isType('quarry', 'wastewater', 'waste')) push('pollution', R('likely', 'Activity is typically a scheduled / prescribed activity'), 'state');
+  else if (c.type === 'commercial' && c.big) push('pollution', R('possible', 'Required if the operation is a scheduled industrial activity'), 'state');
+  else if (c.type === 'marine') push('pollution', R('possible', 'Dredging and marine works can be scheduled activities'), 'state');
+  else if ((c.has('linear') || c.has('large')) && c.scale === 'major') push('pollution', R('possible', 'Temporary concrete batching, crushing or screening plants'), 'state');
+
+  // Native vegetation
+  if (c.F('veg')) push('veg', R('likely', c.type === 'clearing' ? 'Clearing is the activity' : 'Native vegetation removal flagged'), 'state');
+  else if (c.isType('solar', 'wind', 'road', 'rail', 'pipeline', 'transmission', 'quarry', 'dam')) push('veg', R('possible', 'Projects of this type commonly require some clearing'), 'state');
+
+  // Threatened species
+  if (c.F('species')) push('species', R('likely', 'Threatened species or habitat flagged'), 'state');
+  else if (c.F('veg') || c.type === 'wind') push('species', R('possible', 'Vegetation removal or turbine strike risk may affect protected species'), 'state');
+
+  // Queensland koala — SEQ
+  if (c.jur === 'QLD' && (c.F('veg') || c.has('large')) && c.lat != null && c.lat > -28.3 && c.lat < -25.4 && c.lng > 151.8) {
+    out.push({ key: 'koala', level: 'state', lik: 'possible', why: 'Site appears to be in South East Queensland',
+      title: 'Koala habitat area assessment', law: 'Planning Regulation 2017 (SEQ koala habitat provisions); Nature Conservation (Koala) Conservation Plan 2017', auth: 'SARA / Council',
+      note: 'Clearing in koala habitat areas or priority areas is heavily restricted in SEQ.' });
+  }
+
+  // Waterways
+  if (c.F('water')) push('water', R('likely', c.type === 'bridge' || c.type === 'dam' ? 'Works in or across a waterway' : 'Waterway, wetland or floodplain flagged'), 'state');
+  else if (c.isType('pipeline', 'road', 'rail')) push('water', R('possible', 'Linear projects often cross waterways'), 'state');
+
+  // Groundwater
+  if (c.F('groundwater')) push('groundwater', R('likely', 'Dewatering or groundwater interaction flagged'), 'state');
+  else if (c.isType('quarry', 'wastewater', 'pipeline') || (c.type === 'commercial' && c.scale === 'major')) push('groundwater', R('possible', 'Excavations may intercept groundwater'), 'state');
+
+  // Coastal
+  if (c.F('coast')) push('coast', R('likely', c.type === 'marine' ? 'Marine works' : 'Coastal environment flagged'), 'state');
+
+  // Acid sulfate soils
+  if ((c.F('coast') || c.F('groundwater')) && c.jur !== 'ACT' && c.has('ground')) {
+    out.push({ key: 'ass', level: 'state', lik: 'possible', why: 'Coastal or groundwater conditions where acid sulfate soils are common',
+      title: 'Acid sulfate soils investigation and management plan', law: 'State acid sulfate soil guidelines and planning controls (e.g. NSW LEP clauses, Queensland SPP, WA DWER guidelines)', auth: 'Council / state environment agency' });
+  }
+
+  // Aboriginal cultural heritage
+  if (c.F('cultural')) push('ab', R('likely', 'Cultural heritage sensitivity flagged'), 'state');
+  else if (c.has('ground') && (c.big || c.F('water') || c.F('coast'))) push('ab', R('possible', 'Ground disturbance — check cultural heritage databases and sensitivity mapping'), 'state');
+
+  // Historic heritage
+  if (c.F('heritage')) push('hist', R('likely', 'Heritage place or archaeology flagged'), 'state');
+  else if (c.type === 'demolition') push('hist', R('possible', 'Check heritage listings before demolition'), 'state');
+
+  // Contaminated land
+  if (c.F('contam')) push('contam', R('likely', 'Potentially contaminated land flagged'), 'state');
+  else if (c.isType('demolition', 'commercial', 'subdivision')) push('contam', R('possible', 'Check previous land uses and contaminated land registers'), 'state');
+
+  // Crown land
+  if (c.F('crown')) push('crown', R('likely', 'Crown, public or conservation land flagged'), 'state');
+
+  // Dams
+  if (c.type === 'dam') push('dam', R('likely', 'Construction of a dam or water storage'), 'state');
+
+  // Noise (guidance; WA sits with local government)
+  if (c.F('noise') || c.scale === 'major') push('noise', R(c.F('noise') ? 'likely' : 'check', c.F('noise') ? 'Night works or sensitive receivers flagged' : 'Major works near communities'), c.jur === 'WA' ? 'local' : 'state');
+
+  // Duties
+  push('duty', R('check', 'Applies to all construction regardless of approvals'), 'state');
+
+  /* ---- Council / local ---- */
+  if (c.has('building') || c.isType('telco', 'bess', 'wastewater') ) push('building', R(c.isType('dwelling', 'commercial', 'subdivision', 'waste') ? 'likely' : 'possible', 'Building works are proposed'), 'local');
+
+  if (c.F('road')) push('road', R('likely', 'Works in road reserve flagged'), 'local');
+  else if (c.has('linear') || c.isType('subdivision', 'commercial')) push('road', R('possible', 'Service connections, crossovers or access works'), 'local');
+
+  if (c.F('trees')) push('trees', R('likely', 'Tree removal flagged'), 'local');
+  else if (c.isType('dwelling', 'subdivision', 'commercial', 'demolition')) push('trees', R('possible', 'Urban sites often have protected trees'), 'local');
+
+  (J.extraLocal || []).forEach(x => { if (x.when(c)) out.push(Object.assign({ key: 'x-' + x.item.title, level: 'local', lik: x.lik, why: x.why }, x.item)); });
+
+  if (c.isType('subdivision', 'commercial', 'road', 'rail', 'wastewater', 'waste') || c.scale === 'major') {
+    out.push({ key: 'cemp', level: 'local', lik: 'possible', why: 'Commonly required as a permit condition',
+      title: 'Construction (environmental) management plan', law: 'Permit conditions; council local laws', auth: J.noCouncils ? 'ACT Government' : 'Council' });
+  }
+  if (c.isType('commercial', 'waste', 'wastewater')) {
+    out.push({ key: 'tradewaste', level: 'local', lik: 'possible', why: 'Discharge of non-domestic wastewater to sewer',
+      title: 'Trade waste agreement / consent', law: 'Water authority trade waste requirements', auth: 'Local water authority' });
+  }
+  if (c.has('ground') && c.big) {
+    out.push({ key: 'stormwater', level: 'local', lik: 'possible', why: 'New hardstand, drainage or sediment-laden runoff',
+      title: 'Stormwater connection / legal point of discharge', law: 'Council stormwater requirements; water authority drainage approvals', auth: J.noCouncils ? 'ACT Government' : 'Council / drainage authority' });
+  }
+
+  // Substitute Victoria's waterway authority
+  out.forEach(i => {
+    if (i.auth === '{VIC_WATER}') {
+      const melb = c.lat != null && c.lat > -38.55 && c.lat < -37.35 && c.lng > 144.35 && c.lng < 145.95;
+      i.auth = melb ? 'Melbourne Water' : 'Catchment Management Authority (CMA) for the area';
+    }
+  });
+  return out;
+}
+
+/* ---------------- New Zealand rules ---------------- */
+function nzRules(c, region) {
+  const out = [];
+  const add = (level, lik, why, title, law, auth, note) => out.push({ level, lik, why, title, law, auth, note });
+  const rc = region ? region.rc : 'Regional council';
+  const unitary = region && region.unitary;
+  const dc = c.council || (unitary ? rc : 'District / city council');
+
+  if (c.offshore) {
+    add('fed', 'likely', 'Activity in the exclusive economic zone or continental shelf', 'Marine consent', 'Exclusive Economic Zone and Continental Shelf (Environmental Effects) Act 2012', 'Environmental Protection Authority (EPA)',
+      'Within 12 nautical miles, works instead need a coastal permit from the regional council.');
+    add('fed', 'possible', 'Marine mammals and seabirds', 'Marine mammal and wildlife approvals', 'Marine Mammals Protection Act 1978; Wildlife Act 1953', 'Department of Conservation');
+    if (c.type === 'wind' || c.type === 'transmission') add('fed', 'likely', 'Offshore renewable energy', 'Offshore renewable energy permit', 'Offshore renewable energy legislation (feasibility and commercial permit regime)', 'Ministry of Business, Innovation and Employment',
+      'Check the current status and commencement of the offshore renewable energy permitting regime.');
+    return out;
+  }
+
+  /* National */
+  if (c.F('species')) add('fed', 'likely', 'Threatened species or habitat flagged', 'Wildlife Act authority', 'Wildlife Act 1953', 'Department of Conservation', 'Needed to catch, relocate or disturb protected wildlife, including lizards, bats and native birds.');
+  else if (c.F('veg') || c.isType('clearing', 'solar', 'wind', 'road', 'quarry')) add('fed', 'possible', 'Vegetation clearance may disturb lizards, bats or nesting birds', 'Wildlife Act authority', 'Wildlife Act 1953', 'Department of Conservation');
+
+  if (c.F('heritage') || c.F('cultural')) add('fed', 'likely', 'Heritage or cultural sensitivity flagged', 'Archaeological authority', 'Heritage New Zealand Pouhere Taonga Act 2014', 'Heritage New Zealand Pouhere Taonga', 'Required before modifying or destroying any pre-1900 archaeological site, whether recorded or not.');
+  else if (c.has('ground')) add('fed', 'possible', 'Ground disturbance could encounter pre-1900 archaeology', 'Archaeological authority (or accidental discovery protocol)', 'Heritage New Zealand Pouhere Taonga Act 2014', 'Heritage New Zealand Pouhere Taonga');
+
+  add('fed', c.F('cultural') ? 'likely' : 'check', c.F('cultural') ? 'Sites of significance to Māori flagged' : 'Good practice for most projects and expected in consent applications',
+    'Engagement with tangata whenua / cultural impact assessment', 'Treaty settlement legislation (statutory acknowledgements); iwi management plans', 'Mana whenua / iwi authorities');
+
+  if (c.F('crown')) add('fed', 'likely', 'Conservation or reserve land flagged', 'Concession or reserve consent', 'Conservation Act 1987 (Part 3B concessions); Reserves Act 1977', 'Department of Conservation / reserve administering body');
+
+  if (c.isType('bridge', 'dam') || (c.F('water') && c.isType('road', 'rail', 'pipeline'))) add('fed', c.isType('bridge', 'dam') ? 'likely' : 'possible', 'Culverts, fords, weirs or dams may block fish passage', 'Fish passage approval', 'Freshwater Fisheries Regulations 1983 (Part 6)', 'Department of Conservation');
+
+  if (c.F('coast') || c.type === 'marine') add('fed', 'possible', 'Coastal works may be in an area with customary marine title applications', 'Customary marine title — RMA permission right', 'Marine and Coastal Area (Takutai Moana) Act 2011', 'Customary marine title group');
+
+  if (c.scale === 'major') add('fed', 'possible', 'Major-scale project of regional or national significance', 'Fast-track approval (optional pathway)', 'Fast-track Approvals Act 2024', 'Expert panel (applications via the Ministry)', 'A one-stop alternative to separate consents for listed or referred projects.');
+
+  if (c.isType('bess', 'commercial', 'wastewater', 'quarry', 'waste')) add('fed', 'possible', 'Hazardous substances stored or used on site', 'Hazardous substances approvals and compliance certification', 'Hazardous Substances and New Organisms Act 1996; Health and Safety at Work (Hazardous Substances) Regulations 2017', 'EPA / WorkSafe');
+
+  if (c.type === 'quarry') add('fed', 'possible', 'Crown-owned minerals (gold, silver, uranium, petroleum) or Crown land', 'Minerals permit', 'Crown Minerals Act 1991', 'New Zealand Petroleum and Minerals');
+
+  if (c.has('tall')) add('fed', 'possible', 'Tall structures near aerodromes or flight paths', 'Notice of proposed obstruction to aviation', 'Civil Aviation Rules Part 77', 'Civil Aviation Authority');
+
+  /* Regional (or unitary) */
+  const R_ = 'regional';
+  const earthworksHeavy = c.isType('clearing', 'road', 'rail', 'quarry', 'solar', 'wind', 'subdivision', 'dam') || (c.has('ground') && c.scale === 'major');
+  if (earthworksHeavy || c.F('veg')) add(R_, 'likely', 'Earthworks or vegetation clearance likely to exceed regional plan permitted thresholds', 'Regional land use consent — earthworks and vegetation clearance', 'Resource Management Act 1991 s9 (regional plan rules)', rc, 'Erosion and sediment control plans are usually required.');
+  else if (c.has('ground') && c.big) add(R_, 'possible', 'Larger earthworks may exceed permitted thresholds', 'Regional land use consent — earthworks', 'Resource Management Act 1991 s9 (regional plan rules)', rc);
+
+  if (c.isType('bridge', 'dam') || (c.F('water') && c.isType('pipeline', 'road', 'rail', 'transmission'))) add(R_, 'likely', 'Structures or disturbance in the bed of a river or lake', 'Land use consent — beds of rivers and lakes', 'Resource Management Act 1991 s13', rc);
+
+  if (c.F('water') && (c.has('ground') || c.F('veg'))) add(R_, 'likely', 'Works near natural inland wetlands or rivers', 'NES-Freshwater consent', 'Resource Management (National Environmental Standards for Freshwater) Regulations 2020', rc, 'Vegetation clearance, earthworks and water take within set distances of a natural inland wetland are regulated.');
+
+  if (c.F('groundwater') || c.type === 'dam') add(R_, 'likely', c.type === 'dam' ? 'Damming or diverting water' : 'Dewatering or groundwater take', 'Water permit — take, use, dam or divert water', 'Resource Management Act 1991 s14', rc);
+  else if (c.isType('quarry', 'wastewater')) add(R_, 'possible', 'Water take for processing, dust suppression or dewatering', 'Water permit', 'Resource Management Act 1991 s14', rc);
+
+  if (c.isType('wastewater', 'waste', 'quarry')) add(R_, 'likely', 'Discharges of contaminants to air, water or land', 'Discharge permit', 'Resource Management Act 1991 s15; NES for Air Quality', rc);
+  else if (c.has('ground') && c.big) add(R_, 'possible', 'Construction stormwater and sediment discharges', 'Discharge permit — construction stormwater', 'Resource Management Act 1991 s15', rc);
+  if (c.F('contam')) add(R_, 'possible', 'Disturbing contaminated soil can trigger regional discharge rules', 'Discharge permit — contaminated land', 'Resource Management Act 1991 s15 (regional plan rules)', rc);
+
+  if (c.type === 'marine' || c.F('coast')) add(R_, c.type === 'marine' ? 'likely' : 'possible', 'Works or occupation in the coastal marine area', 'Coastal permit', 'Resource Management Act 1991 s12; New Zealand Coastal Policy Statement 2010', rc);
+
+  if (c.type === 'dam') add(R_, 'likely', 'Classifiable dams must meet dam safety requirements', 'Dam safety — classification and building consent', 'Building Act 2004; Building (Dam Safety) Regulations 2022', rc);
+
+  /* District / city */
+  const D = 'local';
+  add(D, c.isType('dwelling', 'demolition', 'telco') ? 'possible' : 'likely',
+    c.isType('dwelling', 'demolition') ? 'May be a permitted activity depending on zone and overlays' : 'Activity status depends on district plan zone and overlays',
+    'District land use consent', 'Resource Management Act 1991 s9 (district plan)', dc,
+    c.type === 'telco' ? 'Check the NES for Telecommunication Facilities 2016 — many facilities are permitted.' :
+    c.type === 'transmission' ? 'Check the NES for Electricity Transmission Activities 2009.' : null);
+
+  if (c.type === 'subdivision') add(D, 'likely', 'Creating new lots', 'Subdivision consent', 'Resource Management Act 1991 s11', dc);
+
+  if (c.F('contam')) add(D, 'likely', 'Potentially contaminated (HAIL) land flagged', 'NES-CS consent / detailed site investigation', 'Resource Management (National Environmental Standard for Assessing and Managing Contaminants in Soil to Protect Human Health) Regulations 2011', dc);
+  else if (c.isType('demolition', 'commercial', 'subdivision')) add(D, 'possible', 'Check the LIM and HAIL register for past land use', 'NES-CS preliminary site investigation', 'NES for Assessing and Managing Contaminants in Soil 2011', dc);
+
+  if (c.has('building') || c.isType('telco', 'bess', 'bridge')) add(D, 'likely', 'Building work is proposed', 'Building consent', 'Building Act 2004', dc + ' (building consent authority)');
+  if (c.type === 'demolition') add(D, 'possible', 'Some demolition requires building consent', 'Building consent (demolition)', 'Building Act 2004', dc);
+
+  if (c.F('trees')) add(D, 'likely', 'Scheduled or notable tree removal flagged', 'Consent for scheduled tree works', 'District plan notable tree schedule', dc);
+  if (c.F('heritage')) add(D, 'likely', 'Scheduled heritage item flagged', 'Consent for works on a scheduled heritage item', 'District plan heritage schedule', dc);
+
+  if (c.F('road') || c.has('linear')) add(D, c.F('road') ? 'likely' : 'possible', 'Works in a road or rail corridor', 'Corridor access request (CAR)', 'Utilities Access Act 2010; National Code of Practice for Utility Operators’ Access to Transport Corridors', 'Road controlling authority (' + dc + ' or NZTA)');
+
+  if (c.has('publicInfra') || c.type === 'transmission') add(D, 'possible', 'Requiring authorities can designate land for network infrastructure', 'Notice of requirement / outline plan of works', 'Resource Management Act 1991 Part 8 (designations)', 'Requiring authority; ' + dc);
+
+  if (c.F('noise') || c.scale === 'major') add(D, c.F('noise') ? 'likely' : 'check', 'Construction noise limits apply', 'Construction noise management', 'District plan noise rules; NZS 6803:1999 Acoustics — Construction noise', dc);
+
+  if (c.isType('commercial', 'waste', 'wastewater')) add(D, 'possible', 'Discharge of trade waste to the sewer network', 'Trade waste consent', 'Council trade waste bylaw', dc);
+
+  return out;
+}
+
+/* ---------------- main entry ---------------- */
+function evaluate(input) {
+  const c = makeCtx(input);
+  if (!c.t) return { error: 'Choose a construction type.' };
+  let items = [];
+  let links = [];
+  let notes = [];
+
+  if (c.country === 'AU') {
+    AU_FED.forEach(r => { const res = r.when(c); if (res) items.push(Object.assign({ level: 'fed' }, r.item, res)); });
+    links = AU_FED_LINKS.slice();
+    if (c.offshore || c.jur === 'CW') {
+      notes.push('Commonwealth waters generally begin 3 nautical miles from the coast. Inside that limit, state coastal and planning approvals also apply — choose the adjacent state to include them.');
+    } else {
+      const J = AU[c.jur];
+      if (J) { items = items.concat(auStateRules(c, J)); links = links.concat(J.links); }
+      if (J && J.noCouncils) notes.push('The ACT has no local councils. Municipal approvals are issued by the ACT Government.');
+      if (c.jur === 'NT') notes.push('In the NT, development permits are issued by the Development Consent Authority, not councils.');
+    }
+  } else if (c.country === 'NZ') {
+    const region = NZ_REGIONS.find(r => r.k === c.jur) || null;
+    items = nzRules(c, region);
+    links = NZ_LINKS.slice();
+    notes.push('The Planning Bill and Natural Environment Bill (replacing the RMA) passed their third reading in September 2026. Existing RMA plans, consents and processes continue during a staged transition, so consent types are described under the current RMA framework.');
+    if (region && region.unitary) notes.push(region.rc + ' is a unitary authority — it issues both regional and district consents.');
+  }
+
+  const order = { likely: 0, possible: 1, check: 2 };
+  items.sort((a, b) => order[a.lik] - order[b.lik]);
+  const groups = { fed: [], state: [], regional: [], local: [] };
+  items.forEach(i => (groups[i.level] || groups.state).push(i));
+  return { ctx: c, groups, links, notes, count: items.length };
+}
+
+if (typeof module !== 'undefined') module.exports = { TYPES, FEATURES, AU, AU_CODES, NZ_REGIONS, nzRegionFromName, evaluate };
+
+</script>
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const LIK = { likely: 'Likely required', possible: 'May be required', check: 'Check / duty' };
+  const SCALE_NOTES = {
+    minor: 'Small works with limited footprint and few site constraints.',
+    moderate: 'A typical development application or consent-scale project.',
+    major: 'State-significant / nationally significant, or likely to need an EIS.'
+  };
+
+  const state = { lat: null, lng: null, country: null, jur: null, council: '', place: '', type: null, scale: 'moderate', features: new Set(), filter: 'all' };
+
+  /* ---------- Jurisdiction select ---------- */
+  const jurSel = $('#jur');
+  function buildJurOptions() {
+    let h = '<optgroup label="Australia">';
+    Object.entries(AU).forEach(([k, v]) => h += `<option value="AU:${k}">${esc(v.name)}</option>`);
+    h += '<option value="AU:CW">Commonwealth waters (offshore)</option></optgroup><optgroup label="New Zealand">';
+    NZ_REGIONS.forEach(r => h += `<option value="NZ:${esc(r.k)}">${esc(r.k)}</option>`);
+    h += '<option value="NZ:EEZ">EEZ / continental shelf (offshore)</option></optgroup>';
+    jurSel.innerHTML = h;
+  }
+  buildJurOptions();
+  jurSel.addEventListener('change', () => {
+    const [c, j] = jurSel.value.split(':');
+    state.country = c; state.jur = j;
+    renderFeatures(); render();
+  });
+  $('#council').addEventListener('input', e => { state.council = e.target.value.trim(); render(); });
+
+  /* ---------- Construction types ---------- */
+  function renderTypes() {
+    const groups = {};
+    Object.entries(TYPES).forEach(([k, t]) => (groups[t.group] = groups[t.group] || []).push([k, t]));
+    let h = '';
+    Object.entries(groups).forEach(([g, list]) => {
+      h += `<div class="group-label">${esc(g)}</div><div class="chips">`;
+      list.forEach(([k, t]) => h += `<button type="button" class="chip" data-k="${k}" aria-pressed="${state.type === k}">${esc(t.label)}</button>`);
+      h += '</div>';
+    });
+    $('#types').innerHTML = h;
+  }
+  $('#types').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    state.type = b.dataset.k;
+    document.querySelectorAll('#types .chip').forEach(x => x.setAttribute('aria-pressed', x === b));
+    renderFeatures(); render();
+  });
+
+  /* ---------- Scale ---------- */
+  function renderScale() {
+    document.querySelectorAll('#scale button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.scale));
+    $('#scaleNote').textContent = SCALE_NOTES[state.scale];
+  }
+  $('#scale').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.scale = b.dataset.v; renderScale(); render();
+  });
+
+  /* ---------- Features ---------- */
+  function renderFeatures() {
+    const implied = new Set((state.type && TYPES[state.type].implies) || []);
+    let h = '';
+    FEATURES.forEach(f => {
+      if (f.country && state.country && f.country !== state.country) return;
+      const auto = implied.has(f.k);
+      const checked = auto || state.features.has(f.k);
+      h += `<label class="feat"><input type="checkbox" data-k="${f.k}" ${checked ? 'checked' : ''} ${auto ? 'disabled' : ''}>
+        <span><b>${esc(f.label)}${auto ? '<span class="auto">from type</span>' : ''}</b><small>${esc(f.hint)}</small></span></label>`;
+    });
+    $('#feats').innerHTML = h;
+    const n = $('#feats').querySelectorAll('input:checked').length;
+    $('#featCount').textContent = n ? n + ' ticked' : 'None ticked';
+  }
+  $('#feats').addEventListener('change', e => {
+    const k = e.target.dataset.k; if (!k) return;
+    e.target.checked ? state.features.add(k) : state.features.delete(k);
+    const n = $('#feats').querySelectorAll('input:checked').length;
+    $('#featCount').textContent = n ? n + ' ticked' : 'None ticked';
+    render();
+  });
+
+  /* ---------- Map ---------- */
+  const map = L.map('map', { zoomControl: true, worldCopyJump: true }).fitBounds([[-47.5, 112], [-9, 179]]);
+  const streets = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19, subdomains: 'abcd',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  }).addTo(map);
+  const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
+  });
+  L.control.layers({ 'Streets': streets, 'Satellite': imagery }, null, { position: 'topright' }).addTo(map);
+  L.control.scale({ imperial: false }).addTo(map);
+  const pinIcon = L.divIcon({ className: '', html: '<div class="pin"></div>', iconSize: [22, 22], iconAnchor: [11, 22] });
+  let marker = null;
+
+  map.on('click', e => setPoint(e.latlng.lat, e.latlng.lng, true));
+
+  function setPoint(lat, lng, geocode, label) {
+    lng = ((lng + 540) % 360) - 180;
+    state.lat = lat; state.lng = lng;
+    if (marker) marker.setLatLng([lat, lng]); else marker = L.marker([lat, lng], { icon: pinIcon, keyboard: false }).addTo(map);
+    $('#mapHint').style.display = 'none';
+    if (geocode) reverse(lat, lng, label);
+  }
+
+  function setStatus(msg, err) { const s = $('#status'); s.textContent = msg || ''; s.classList.toggle('err', !!err); }
+
+  /* ---------- Geocoding (OpenStreetMap Nominatim) ---------- */
+  const COUNCIL_RE = /(City|Shire|Council|Municipal|Municipality|District|Borough|Regional|Town of|Rural City|Region)/i;
+  function pickCouncil(a) {
+    const fields = ['municipality', 'county', 'city', 'town', 'city_district', 'state_district', 'district'];
+    for (const k of fields) if (a[k] && a[k] !== a.state && COUNCIL_RE.test(a[k])) return a[k];
+    return a.municipality || a.county || a.city || a.town || '';
+  }
+
+  async function reverse(lat, lng, label) {
+    setStatus('Looking up jurisdiction…');
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat.toFixed(6)}&lon=${lng.toFixed(6)}&zoom=14&addressdetails=1&accept-language=en`;
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      applyAddress(d, lat, lng, label);
+    } catch (err) {
+      setStatus('Could not reach the address service — choose the jurisdiction and council manually.', true);
+      showLoc(guessCountry(lng) === 'NZ' ? 'NZ:Wellington' : 'AU:VIC', '', label || '');
+    }
+  }
+
+  function guessCountry(lng) { return (lng >= 165 || lng < -170) ? 'NZ' : 'AU'; }
+
+  function applyAddress(d, lat, lng, label) {
+    if (!d || d.error || !d.address) {
+      const c = guessCountry(lng);
+      setStatus('Offshore location — showing Commonwealth / EEZ approvals. Within 3 nm (AU) or 12 nm (NZ) of the coast, choose the adjacent state or region instead.');
+      showLoc(c === 'NZ' ? 'NZ:EEZ' : 'AU:CW', '', 'Offshore waters');
+      return;
+    }
+    const a = d.address, cc = (a.country_code || '').toLowerCase();
+    if (cc === 'au') {
+      const code = AU_CODES[a.state] || (a.state && /jervis/i.test(a.state) ? null : null);
+      if (!code) { setStatus('Location is in an Australian external or Commonwealth territory — choose the closest jurisdiction.', true); showLoc('AU:CW', '', d.display_name); return; }
+      setStatus('');
+      showLoc('AU:' + code, pickCouncil(a), label || shortName(a, d));
+    } else if (cc === 'nz') {
+      const reg = nzRegionFromName(a.state || a.region || a.state_district || '');
+      let council = pickCouncil(a);
+      if (council && !/council$/i.test(council)) council += ' Council';
+      setStatus('');
+      showLoc('NZ:' + (reg ? reg.k : 'Wellington'), council, label || shortName(a, d));
+      if (!reg) setStatus('Region not identified — please check the jurisdiction.', true);
+    } else {
+      setStatus('That point is outside Australia and New Zealand. Pick a site in AU or NZ.', true);
+    }
+  }
+
+  function shortName(a, d) {
+    const parts = [a.road, a.suburb || a.village || a.town || a.city || a.hamlet, a.state].filter(Boolean);
+    return parts.length ? parts.join(', ') : d.display_name;
+  }
+
+  function showLoc(jurVal, council, place) {
+    jurSel.value = jurVal;
+    const [c, j] = jurVal.split(':');
+    state.country = c; state.jur = j; state.council = council || ''; state.place = place || '';
+    $('#council').value = state.council;
+    $('#loc').classList.add('show');
+    $('#locMeta').textContent = (place ? place + ' · ' : '') + state.lat.toFixed(5) + ', ' + state.lng.toFixed(5);
+    renderFeatures(); render();
+  }
+
+  $('#searchForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = $('#q').value.trim(); if (!q) return;
+    setStatus('Searching…');
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=au,nz&limit=1&addressdetails=1&accept-language=en&q=${encodeURIComponent(q)}`);
+      const res = await r.json();
+      if (!res.length) { setStatus('No match found in Australia or New Zealand.', true); return; }
+      const hit = res[0];
+      const lat = +hit.lat, lng = +hit.lon;
+      setPoint(lat, lng, false);
+      map.setView([lat, lng], 14);
+      applyAddress(hit, lat, lng, hit.display_name.split(',').slice(0, 3).join(','));
+    } catch (err) { setStatus('Search is unavailable right now — click the map instead.', true); }
+  });
+
+  /* ---------- Results ---------- */
+  let last = null;
+  function levelMeta(res) {
+    const c = res.ctx;
+    if (c.country === 'AU') {
+      const J = AU[c.jur];
+      return [
+        ['fed', 'Federal', 'Commonwealth of Australia'],
+        ['state', J ? 'State / Territory' : 'State / Territory', J ? J.name : 'Not applicable offshore'],
+        ['local', J && J.noCouncils ? 'Local (ACT Government)' : 'Council & local authorities', state.council || (J && J.noCouncils ? 'ACT Government' : 'Local council')]
+      ];
+    }
+    const reg = NZ_REGIONS.find(r => r.k === c.jur);
+    return [
+      ['fed', 'National', 'New Zealand'],
+      ['regional', reg && reg.unitary ? 'Regional (unitary authority)' : 'Regional council', reg ? reg.rc : 'Not applicable offshore'],
+      ['local', 'District / city council', state.council || (reg && reg.unitary ? reg.rc : 'District or city council')]
+    ];
+  }
+
+  function visible(i) {
+    if (state.filter === 'likely') return i.lik === 'likely';
+    if (state.filter === 'req') return i.lik !== 'check';
+    return true;
+  }
+
+  function render() {
+    const box = $('#results');
+    updateHash();
+    if (state.lat == null || !state.type) {
+      box.innerHTML = `<div class="empty"><b>${state.lat == null ? 'Choose a site to begin' : 'Now choose a construction type'}</b>
+        Results list the approvals that may apply, grouped by level of government.</div>`;
+      return;
+    }
+    const res = evaluate({
+      country: state.country, jur: state.jur, type: state.type, scale: state.scale,
+      features: [...state.features], lat: state.lat, lng: state.lng, council: state.council,
+      offshore: state.jur === 'CW' || state.jur === 'EEZ'
+    });
+    last = res;
+    const all = Object.values(res.groups).flat();
+    const n = k => all.filter(i => i.lik === k).length;
+    const loc = state.country === 'AU' ? (AU[state.jur] ? AU[state.jur].name : 'Commonwealth waters') : (state.jur === 'EEZ' ? 'NZ EEZ' : state.jur + ', NZ');
+
+    let h = `<div class="res-head"><h2>${esc(TYPES[state.type].label)}</h2>
+      <p>${esc(loc)}${state.council ? ' · ' + esc(state.council) : ''} · ${esc(state.scale)} scale</p>
+      <div class="counts"><span class="count"><b>${n('likely')}</b>likely</span><span class="count"><b>${n('possible')}</b>possible</span><span class="count"><b>${n('check')}</b>checks & duties</span></div></div>
+      <div class="res-tools">
+        <div class="filter" role="group" aria-label="Filter results">
+          <button type="button" data-f="all" aria-pressed="${state.filter === 'all'}">All</button>
+          <button type="button" data-f="req" aria-pressed="${state.filter === 'req'}">Approvals only</button>
+          <button type="button" data-f="likely" aria-pressed="${state.filter === 'likely'}">Likely</button>
+        </div>
+        <button class="btn" type="button" data-act="copy">Copy</button>
+        <button class="btn" type="button" data-act="csv">CSV</button>
+        <button class="btn" type="button" data-act="print">Print</button>
+        <button class="btn" type="button" data-act="link">Link</button>
+      </div>`;
+
+    if (res.notes.length) h += `<div class="note-box">${res.notes.map(x => `<p>${esc(x)}</p>`).join('')}</div>`;
+
+    levelMeta(res).forEach(([key, title, sub]) => {
+      const items = (res.groups[key] || []).filter(visible);
+      h += `<section class="level"><div class="level-h"><h3>${esc(title)}</h3><span>${esc(sub)}</span></div>`;
+      if (!items.length) h += `<div class="level-empty">Nothing flagged at this level for the current selections.</div>`;
+      items.forEach(i => {
+        h += `<article class="item ${i.lik}"><div class="item-head"><h4>${esc(i.title)}</h4><span class="badge ${i.lik}">${LIK[i.lik]}</span></div>
+          <dl><dt>Legislation</dt><dd>${esc(i.law)}</dd><dt>Authority</dt><dd>${esc(i.auth)}</dd></dl>
+          <p class="why">${esc(i.why)}</p>${i.note ? `<p class="inote">${esc(i.note)}</p>` : ''}</article>`;
+      });
+      h += '</section>';
+    });
+
+    const links = res.links.slice();
+    if (state.council) links.unshift([state.council + (state.country === 'NZ' ? ' — district plan' : ' — planning scheme'),
+      'https://www.google.com/search?q=' + encodeURIComponent(state.council + (state.country === 'NZ' ? ' district plan' : ' planning scheme'))]);
+    h += `<div class="links"><h3>Check these maps and registers</h3><ul>${links.map(([t, u]) => `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a></li>`).join('')}</ul></div>`;
+    h += `<p class="disclaimer"><b>Screening guidance only — not legal advice.</b> Whether an approval is needed depends on site-specific zoning and overlays, thresholds, exemptions and project detail. Always confirm with the relevant authority and check current legislation. Content reviewed October 2026. Location lookup &copy; OpenStreetMap contributors.</p>`;
+    box.innerHTML = h;
+  }
+
+  $('#results').addEventListener('click', e => {
+    const f = e.target.closest('[data-f]');
+    if (f) { state.filter = f.dataset.f; render(); return; }
+    const a = e.target.closest('[data-act]'); if (!a || !last) return;
+    const act = a.dataset.act;
+    if (act === 'print') window.print();
+    if (act === 'csv') downloadCSV();
+    if (act === 'copy') copyText(asText(), a, 'Copied');
+    if (act === 'link') copyText(location.href, a, 'Link copied');
+  });
+
+  function rows() {
+    const out = [];
+    levelMeta(last).forEach(([key, title]) => (last.groups[key] || []).filter(visible).forEach(i => out.push([title, i.title, i.law, i.auth, LIK[i.lik], i.why, i.note || ''])));
+    return out;
+  }
+  function asText() {
+    let t = `Environmental approvals screening — ${TYPES[state.type].label}\n${state.place || ''} (${state.lat.toFixed(5)}, ${state.lng.toFixed(5)})\n${state.council ? 'Council: ' + state.council + '\n' : ''}Scale: ${state.scale}\n\n`;
+    let cur = '';
+    rows().forEach(r => { if (r[0] !== cur) { cur = r[0]; t += `\n${cur.toUpperCase()}\n`; } t += `- [${r[4]}] ${r[1]} — ${r[2]} (${r[3]})\n`; });
+    return t + '\nScreening guidance only — confirm with the relevant authorities.';
+  }
+  function downloadCSV() {
+    const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+    const csv = [['Level', 'Approval', 'Legislation', 'Authority', 'Likelihood', 'Why flagged', 'Note']].concat(rows()).map(r => r.map(q).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `approvals-${state.type}-${(state.jur || '').toLowerCase()}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function copyText(t, btn, ok) {
+    const done = () => { const o = btn.textContent; btn.textContent = ok; setTimeout(() => btn.textContent = o, 1400); };
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(done).catch(() => fallbackCopy(t, done)); else fallbackCopy(t, done);
+  }
+  function fallbackCopy(t, done) {
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {} ta.remove();
+  }
+
+  /* ---------- Shareable state in URL hash ---------- */
+  function updateHash() {
+    if (state.lat == null) return;
+    const p = new URLSearchParams();
+    p.set('ll', state.lat.toFixed(5) + ',' + state.lng.toFixed(5));
+    if (state.jur) p.set('j', state.country + ':' + state.jur);
+    if (state.council) p.set('c', state.council);
+    if (state.type) p.set('t', state.type);
+    p.set('s', state.scale);
+    if (state.features.size) p.set('f', [...state.features].join(','));
+    history.replaceState(null, '', '#' + p.toString());
+  }
+  function loadHash() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    if (p.get('t') && TYPES[p.get('t')]) state.type = p.get('t');
+    if (['minor', 'moderate', 'major'].includes(p.get('s'))) state.scale = p.get('s');
+    (p.get('f') || '').split(',').filter(k => FEATURES.some(f => f.k === k)).forEach(k => state.features.add(k));
+    const ll = (p.get('ll') || '').split(',').map(Number);
+    if (ll.length === 2 && ll.every(isFinite)) {
+      setPoint(ll[0], ll[1], false);
+      map.setView(ll, 11);
+      const j = p.get('j');
+      if (j && [...jurSel.options].some(o => o.value === j)) showLoc(j, p.get('c') || '', '');
+      else reverse(ll[0], ll[1]);
+    }
+  }
+
+  renderTypes(); renderScale(); renderFeatures();
+  loadHash();
+  renderTypes();
+  render();
+})();
+</script>
+</body>
+</html>
